@@ -7,15 +7,9 @@ using System.Drawing;
 
 namespace SurfaceMaze
 {
+
     public class MazeMaker
     {
-
-        public enum CellStatus
-        {
-            Maze,
-            Wall,
-            Reserved
-        }
 
         public Bitmap Template { get; set; }
         public Bitmap Maze { get; set; }
@@ -44,7 +38,9 @@ namespace SurfaceMaze
             InitializeGrid();
 
             //pick a starting point and add to pending
-            Pending.Add(GetStartingPoint());
+            Point start = GetStartingPoint();
+            Grid[start.X, start.Y].Origin = start; //set origin of start to itself
+            Pending.Add(start);
 
             //while pending count > 0
             Random rnd = new Random();
@@ -60,44 +56,54 @@ namespace SurfaceMaze
                 {
 
                     //add to maze
-                    Grid[p.X, p.Y] = CellStatus.Maze;
+                    Grid[p.X, p.Y].Visited = true;
 
                     //add neighbors to pending
                     foreach(Point n in GetNeighbors(p))
                     {
                         //check that it is valid
-                        if (IsCellValidToAddToMaze(n))
+                        if (IsCellValidToAddToMaze(n) && !Pending.Contains(n))
                         {
+                            //preset origin to come from this position
+                            Grid[n.X, n.Y].Origin = p;
+
+                            //add to pending
                             Pending.Add(n);
                         }
                     }
 
                 }
 
+                //update visited
+                Grid[p.X, p.Y].Visited = true;
+
                 // remove from pending
                 Pending.RemoveAt(rndIndex);
+
+                //shuffle pending
+                Pending.Shuffle();
             }
 
         }
 
         private void InitializeGrid()
         {
-            Grid = new CellStatus[(Template.Width - Resolution) / Resolution, (Template.Height - Resolution) / Resolution];
+            Grid = new CellStatus[(Template.Width ) / Resolution, (Template.Height ) / Resolution];
 
             //iterate over bitmap pixels by resolution steps
-            for (int x = 0; x < Template.Width - Resolution; x += Resolution)
+            for (int x = 0; x < Grid.GetLength(0); x ++)
             {
-                for (int y = 0; y < Template.Height - Resolution; y += Resolution)
+                for (int y = 0; y < Grid.GetLength(1); y++)
                 {
                     //populate grid array for masked color
-                    Color c = Template.GetPixel(x, y);
+                    Color c = Template.GetPixel(x * Resolution, y * Resolution);
                     if (c.ToArgb() == Color.Black.ToArgb())
                     {
-                        Grid[x / Resolution, y / Resolution] = CellStatus.Wall;
+                        Grid[x, y] = new CellStatus() { Reserved = false, Visited = false };
                     }
                     else
                     {
-                        Grid[x / Resolution, y / Resolution] = CellStatus.Reserved;
+                        Grid[x, y] = new CellStatus() { Reserved = true, Visited = false };
                     }
                 }
             }
@@ -107,16 +113,9 @@ namespace SurfaceMaze
         private bool IsCellValidToAddToMaze(Point p)
         {
 
-            //must be a wall
-            if (Grid[p.X, p.Y] != CellStatus.Wall) { return false; }
-
-            //neighbor count needs to be 1 (or 0 if it is the very first starting cell)
-            int mazeCount = 0;
-            foreach(Point n in GetNeighbors(p))
-            {
-                if(Grid[n.X,n.Y] == CellStatus.Maze) { mazeCount += 1; }
-            }
-            if(mazeCount > 1) { return false;}
+            //can't have already been visited or be reserved
+            if (Grid[p.X, p.Y].Visited == true) { return false; }
+            if (Grid[p.X, p.Y].Reserved == true) { return false; }
 
             //valid!
             return true;
@@ -157,7 +156,7 @@ namespace SurfaceMaze
             {
                 for (int y= 0; y < Grid.GetLength(1); y++)
                 {
-                    if(Grid[x,y] == CellStatus.Wall) { return new Point(x, y); }
+                    if(Grid[x,y].Reserved == false) { return new Point(x, y); }
                 }
             }
 
@@ -169,37 +168,29 @@ namespace SurfaceMaze
         {
 
             //duplicate template
-            Maze = new Bitmap(Template);
+            Maze = new Bitmap(Template.Width,Template.Height);
 
-            //iterate over grid
-            for (int x = 0; x < Grid.GetLength(0); x ++)
+            //get ready to draw on bitmap
+            using (Graphics gr = Graphics.FromImage(Maze))
             {
-                for (int y = 0; y < Grid.GetLength(1); y ++)
+
+                //iterate over grid
+                for (int x = 0; x < Grid.GetLength(0); x++)
                 {
-
-                    //iterate block of pixels in bitmap from origin determined from grid position
-                    for (int bx = x * Resolution; bx < (x + 1) * Resolution; bx++)
+                    for (int y = 0; y < Grid.GetLength(1); y++)
                     {
-                        for (int by = y * Resolution; by < (y + 1) * Resolution; by++)
+
+                        CellStatus c = Grid[x, y];
+
+                        if (!c.Reserved)
                         {
-
-
-
-                            //draw to bitmap
-                            Color c = Template.GetPixel(x, y);
-                            if (Grid[x, y] == CellStatus.Maze)
+                            using (Pen p = new Pen(Color.Black, 1))
                             {
-                                Maze.SetPixel(bx, by, Color.Black);
+                                gr.DrawLine(p, new Point(x * Resolution, y * Resolution), new Point(c.Origin.X * Resolution, c.Origin.Y * Resolution));
                             }
-                            else if (Grid[x, y] == CellStatus.Wall)
-                            {
-                                Maze.SetPixel(bx, by, Color.Transparent);
-                            }
-                            else if (Grid[x, y] == CellStatus.Reserved)
-                            {
-                                Maze.SetPixel(bx, by, Color.Red);
-                            }
+                             
                         }
+
                     }
                 }
             }
