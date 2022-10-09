@@ -16,29 +16,35 @@ namespace SurfaceMaze
         public int Resolution { get; set; }
         private CellStatus[,] Grid { get; set; }
         private List<Point> Pending = new List<Point>();
-       
+        private bool GridIsInitialized = false;
+        public int WallThickness { get; set; }
 
-        public MazeMaker(Bitmap template, int resolution)
+
+        public MazeMaker(Bitmap template, int resolution, int thickness)
         {
             Template = template;
             Resolution = resolution;
+            WallThickness = thickness;
         }
 
-        public Bitmap Build()
+        public Bitmap Build(bool buildRandom)
         {
-            Generate();
+            InitializeGrid();
+            Point start = GetStartingPoint();
+            return Build(start, buildRandom);
+        }
+
+        public Bitmap Build(Point start, bool buildRandom)
+        {
+            InitializeGrid();
+            Generate(start, buildRandom);
             DrawBitmap();
             return Maze;
         }
 
-        private void Generate()
+        private void Generate(Point start, bool buildRandom)
         {
 
-            //intialize grid
-            InitializeGrid();
-
-            //pick a starting point and add to pending
-            Point start = GetStartingPoint();
             Grid[start.X, start.Y].Origin = start; //set origin of start to itself
             Pending.Add(start);
 
@@ -48,8 +54,10 @@ namespace SurfaceMaze
             {
 
                 //get random pending
-                int rndIndex = rnd.Next(0, Pending.Count - 1);
-                Point p = Pending[rndIndex];
+                //int rndIndex = rnd.Next(0, Pending.Count - 1);
+                //Point p = Pending[rndIndex];
+                int lastIndex = Pending.Count - 1;
+                Point p = Pending[lastIndex];
 
                 //is cell a valid cell to add to the maze?
                 if (IsCellValidToAddToMaze(p))
@@ -58,8 +66,12 @@ namespace SurfaceMaze
                     //add to maze
                     Grid[p.X, p.Y].Visited = true;
 
+                    // get neighbors
+                    List<Point> neighbors = GetNeighbors(p);
+                    neighbors.Shuffle();
+
                     //add neighbors to pending
-                    foreach(Point n in GetNeighbors(p))
+                    foreach (Point n in neighbors)
                     {
                         //check that it is valid
                         if (IsCellValidToAddToMaze(n) && !Pending.Contains(n))
@@ -78,17 +90,26 @@ namespace SurfaceMaze
                 Grid[p.X, p.Y].Visited = true;
 
                 // remove from pending
-                Pending.RemoveAt(rndIndex);
+                Pending.RemoveAt(lastIndex);
 
                 //shuffle pending
-                Pending.Shuffle();
+                if (buildRandom)
+                {
+                    Pending.Shuffle();
+                }
             }
 
         }
 
         private void InitializeGrid()
         {
+
+            if (GridIsInitialized) { return; }
+
             Grid = new CellStatus[(Template.Width ) / Resolution, (Template.Height ) / Resolution];
+
+            // grid debug to pic
+            //Bitmap gridPic = new Bitmap(Template.Width, Template.Height);
 
             //iterate over bitmap pixels by resolution steps
             for (int x = 0; x < Grid.GetLength(0); x ++)
@@ -96,17 +117,57 @@ namespace SurfaceMaze
                 for (int y = 0; y < Grid.GetLength(1); y++)
                 {
                     //populate grid array for masked color
-                    Color c = Template.GetPixel(x * Resolution, y * Resolution);
-                    if (c.ToArgb() == Color.Black.ToArgb())
+                    //Color c = Template.GetPixel(x * Resolution, y * Resolution);
+                    //if (c.ToArgb() != Color.Black.ToArgb())
+                    if(CheckColorAround(Color.Black,Template,x*Resolution,y*Resolution,Resolution-1))
                     {
                         Grid[x, y] = new CellStatus() { Reserved = false, Visited = false };
+                        //gridPic.SetPixel(x * Resolution, y * Resolution, Color.Black);
                     }
                     else
                     {
                         Grid[x, y] = new CellStatus() { Reserved = true, Visited = false };
+                        //gridPic.SetPixel(x * Resolution, y * Resolution, Color.Red);
                     }
                 }
             }
+
+            GridIsInitialized = true;
+
+            //gridPic.Save(@"C:\Users\micha\OneDrive\Desktop\gridpic.bmp");
+
+        }
+
+        private bool CheckColorAround(Color mask, Bitmap b, int x, int y, int distance)
+        {
+
+            // this function assumes that distance will not be beyond height and width of template, which it needs to be (meaning resolution must divide into height & width)
+
+            //top left
+            if (b.GetPixel(x, y).ToArgb() == mask.ToArgb())
+            {
+                return false;
+            }
+
+            //top right
+            if (b.GetPixel(x+distance, y).ToArgb() == mask.ToArgb())
+            {
+                return false;
+            }
+
+            //bottom left
+            if (b.GetPixel(x, y+ distance).ToArgb() == mask.ToArgb())
+            {
+                return false;
+            }
+
+            //bottom right
+            if (b.GetPixel(x+ distance, y + distance).ToArgb() == mask.ToArgb())
+            {
+                return false;
+            }
+
+            return true;
 
         }
 
@@ -156,7 +217,9 @@ namespace SurfaceMaze
             {
                 for (int y= 0; y < Grid.GetLength(1); y++)
                 {
-                    if(Grid[x,y].Reserved == false) { return new Point(x, y); }
+                    if(Grid[x,y].Reserved == false) { 
+                        return new Point(x, y); 
+                    }
                 }
             }
 
@@ -174,6 +237,13 @@ namespace SurfaceMaze
             using (Graphics gr = Graphics.FromImage(Maze))
             {
 
+                //set black background
+                gr.Clear(Color.Black);
+                //using (Brush b = new SolidBrush(Color.Black))
+                //{
+                //    gr.FillRectangle(b, 0, 0, Maze.Width, Maze.Height);
+                //}
+
                 //iterate over grid
                 for (int x = 0; x < Grid.GetLength(0); x++)
                 {
@@ -184,16 +254,34 @@ namespace SurfaceMaze
 
                         if (!c.Reserved)
                         {
-                            using (Pen p = new Pen(Color.Black, 1))
+                            using (Brush b = new SolidBrush(Color.White))
                             {
-                                gr.DrawLine(p, new Point(x * Resolution, y * Resolution), new Point(c.Origin.X * Resolution, c.Origin.Y * Resolution));
+                                Rectangle rect = new Rectangle(
+                                        Math.Min(x, c.Origin.X) * Resolution + WallThickness,
+                                        Math.Min(y, c.Origin.Y) * Resolution + WallThickness,
+                                        Math.Abs(x - c.Origin.X) * Resolution + Resolution - 1 - WallThickness,
+                                        Math.Abs(y - c.Origin.Y) * Resolution + Resolution - 1 - WallThickness);
+                                gr.FillRectangle(b, rect);
                             }
-                             
+                        } else
+                        {
+                            using (Brush b = new SolidBrush(Color.Red))
+                            {
+                                Rectangle rect = new Rectangle(
+                                        x * Resolution,
+                                        y * Resolution,
+                                        Resolution,
+                                        Resolution);
+                                gr.FillRectangle(b, rect);
+                            }
                         }
 
                     }
                 }
+
             }
+
+            Maze.MakeTransparent(Color.Red);
         }
 
     }

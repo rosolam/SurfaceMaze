@@ -13,10 +13,12 @@ namespace SurfaceMaze
         static void Main(string[] args)
         {
 
+            //Black = MASK, White = MAZE
+
             Bitmap bmp = new Bitmap(@"C:\Users\micha\OneDrive\Desktop\template.png");
-            MazeMaker m = new MazeMaker(bmp, 10);
-            m.Build();
-            m.Maze.Save(@"C:\Users\micha\OneDrive\Desktop\maze.png",ImageFormat.Png);
+            MazeMaker m = new MazeMaker(bmp, 20,1);
+            m.Build(new Point(0,59),false);
+            m.Maze.Save(@"C:\Users\micha\OneDrive\Desktop\maze2.png",ImageFormat.Png);
 
         }
     }
