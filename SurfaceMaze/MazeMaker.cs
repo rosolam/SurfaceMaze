@@ -18,6 +18,7 @@ namespace SurfaceMaze
         private List<Point> Pending = new List<Point>();
         private bool GridIsInitialized = false;
         public int WallThickness { get; set; }
+        public int MaxDistance { get; set; }
 
 
         public MazeMaker(Bitmap template, int resolution, int thickness)
@@ -42,6 +43,21 @@ namespace SurfaceMaze
             return Maze;
         }
 
+        public Bitmap Build(Point start, bool buildRandom, Point end, int distanceThreshold)
+        {
+           do
+            {
+                GridIsInitialized = false;
+                MaxDistance = 0;
+                InitializeGrid();
+                Generate(start, buildRandom);
+                Console.WriteLine("Max Distance: {0}, End Distance: {1}",MaxDistance, Grid[end.X, end.Y].Distance);
+            } while (Grid[end.X, end.Y].Distance < MaxDistance - distanceThreshold);
+            
+            DrawBitmap();
+            return Maze;
+        }
+
         private void Generate(Point start, bool buildRandom)
         {
 
@@ -49,7 +65,7 @@ namespace SurfaceMaze
             Pending.Add(start);
 
             //while pending count > 0
-            Random rnd = new Random();
+            //Random rnd = new Random();
             while (Pending.Count > 0)
             {
 
@@ -78,6 +94,8 @@ namespace SurfaceMaze
                         {
                             //preset origin to come from this position
                             Grid[n.X, n.Y].Origin = p;
+                            Grid[n.X, n.Y].Distance = Grid[p.X, p.Y].Distance + 1;
+                            MaxDistance = Math.Max(MaxDistance, Grid[n.X, n.Y].Distance);
 
                             //add to pending
                             Pending.Add(n);
@@ -254,17 +272,37 @@ namespace SurfaceMaze
 
                         if (!c.Reserved)
                         {
-                            using (Brush b = new SolidBrush(Color.White))
-                            {
-                                Rectangle rect = new Rectangle(
-                                        Math.Min(x, c.Origin.X) * Resolution + WallThickness,
-                                        Math.Min(y, c.Origin.Y) * Resolution + WallThickness,
-                                        Math.Abs(x - c.Origin.X) * Resolution + Resolution - 1 - WallThickness,
-                                        Math.Abs(y - c.Origin.Y) * Resolution + Resolution - 1 - WallThickness);
-                                gr.FillRectangle(b, rect);
-                            }
+                            //if(c.Distance >= MaxDistance - 5)
+                            //{
+
+                            //    using (Brush b = new SolidBrush(Color.Blue))
+                            //    {
+                            //        Rectangle rect = new Rectangle(
+                            //                Math.Min(x, c.Origin.X) * Resolution + WallThickness,
+                            //                Math.Min(y, c.Origin.Y) * Resolution + WallThickness,
+                            //                Math.Abs(x - c.Origin.X) * Resolution + Resolution - 1 - WallThickness,
+                            //                Math.Abs(y - c.Origin.Y) * Resolution + Resolution - 1 - WallThickness);
+                            //        gr.FillRectangle(b, rect);
+                            //    }
+
+                            //} else
+                            //{
+
+                                using (Brush b = new SolidBrush(Color.White))
+                                {
+                                    Rectangle rect = new Rectangle(
+                                            Math.Min(x, c.Origin.X) * Resolution + WallThickness,
+                                            Math.Min(y, c.Origin.Y) * Resolution + WallThickness,
+                                            Math.Abs(x - c.Origin.X) * Resolution + Resolution - 1 - WallThickness,
+                                            Math.Abs(y - c.Origin.Y) * Resolution + Resolution - 1 - WallThickness);
+                                    gr.FillRectangle(b, rect);
+                                }
+
+                            //}
+
                         } else
                         {
+
                             using (Brush b = new SolidBrush(Color.Red))
                             {
                                 Rectangle rect = new Rectangle(

@@ -12,5 +12,6 @@ namespace SurfaceMaze
         public bool Reserved { get; set; }
         public bool Visited { get; set; }
         public Point Origin { get; set; }
+        public int Distance { get; set; }
     }
 }
